@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python test_harness.py)",
+      "Bash(python3 test_harness.py)",
+      "Bash(python3 test_harness.py --mc --trials 1000 --ber)"
+    ]
+  }
+}
