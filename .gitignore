@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Local test / channel I/O (regenerate with transmit.py)
+Encoding/input.txt
+Encoding/output.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
