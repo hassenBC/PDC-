@@ -5,7 +5,7 @@ from encode import (
     MESSAGE_LEN,
     VECTOR_LEN,
     MAX_ENERGY,
-    SYMBOL_AMPLITUDE,
+    r,
     encode,
     check_constraints,
     message_to_bits,
@@ -32,9 +32,17 @@ def test_alphabet():
     assert len(set(ALPHABET)) == 64
 
 
+def test_validate_for_client():
+    from encode import validate_for_client
+
+    msg = "a" * MESSAGE_LEN
+    validate_for_client(encode(msg))  # must not raise
+
+
 if __name__ == "__main__":
     test_alphabet()
     test_round_trip_bits()
     test_constraints()
+    test_validate_for_client()
     print("All encoder tests passed.")
-    print(f"r = {SYMBOL_AMPLITUDE:.6f}")
+    print(f"r = {r:.6f}")

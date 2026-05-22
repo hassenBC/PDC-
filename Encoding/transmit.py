@@ -19,7 +19,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from encode import MESSAGE_LEN, encode, validate_for_client, write_channel_input
+from encode import MESSAGE_LEN, encode, write_channel_input
 
 _CLIENT_DIR = Path(__file__).resolve().parent.parent / "Python client"
 _CLIENT = _CLIENT_DIR / "client.py"
@@ -42,9 +42,7 @@ def main() -> None:
 
     message = pad_message(args.message)
     x = encode(message)
-    validate_for_client(x)
-
-    write_channel_input(x, str(args.output))
+    write_channel_input(x, str(args.output))  # checks client constraints inside
 
     energy = sum(v * v for v in x)
     print(f"Message:  {message!r}")
