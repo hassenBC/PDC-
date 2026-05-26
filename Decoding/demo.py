@@ -31,9 +31,19 @@ import os
 import subprocess
 import numpy as np
 
-from decode       import decode, ALPHABET
+import sys as _sys
+from pathlib import Path as _Path
+_ENCODING_DIR = _Path(__file__).resolve().parent.parent / "Encoding"
+if str(_ENCODING_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_ENCODING_DIR))
+
+from decode        import decode, ALPHABET
 from decode_robust import decode_with_confidence
-from test_harness  import stub_encode   # Replace with Person 2's encode()
+from encode        import encode as _encode
+
+def stub_encode(message):
+    """Thin wrapper so the rest of demo.py keeps working unchanged."""
+    return _encode(message, as_numpy=True)
 
 # ── Server configuration ──────────────────────────────────────────────────────
 SERVER_HOST = 'iscsrv72.epfl.ch'
