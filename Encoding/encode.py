@@ -7,10 +7,16 @@ Frame (n=500):
   x[16:500] - 484 BPSK samples (conv coded message)
 
 Constraints: n even, n<=500, ||x||^2 <= 1200
+
+Theory (Problem 3(a)):
+  BPSK is antipodal: flipping all coded bits sends -x, so the data block alone
+  is symmetric and rotation T_i is not identifiable without pilots. The known
+  pilot block (r, 0) breaks that symmetry before data decoding; see decode.py.
 """
 
 import math
 from typing import List, Sequence, Tuple, Union
+
 import numpy as np
 
 # alphabet must match decoder exactly - don't change order
@@ -31,6 +37,7 @@ CODED_BITS = 484       # 2 * (240 + 2 termination bits)
 # 8 pilots + 484 data = 492 non-zero values, each at amplitude r
 # 492 * r^2 = 1200  =>  r = sqrt(1200/492)
 r = math.sqrt(MAX_ENERGY / (NUM_PILOT_PAIRS + CODED_BITS))
+SYMBOL_AMPLITUDE = r  # alias for tests / docs that use the longer name
 
 # conv encoder params
 CONV_K = 3
@@ -100,9 +107,24 @@ def build_pilots() -> List[float]:
 
 def check_constraints(x: Sequence[float]) -> Tuple[bool, dict]:
     n = len(x)
-    energy = float(sum(v*v for v in x))
+    energy = float(sum(v * v for v in x))
     ok = (n % 2 == 0) and (n <= VECTOR_LEN) and (energy <= MAX_ENERGY + 1e-6)
     return ok, {"length": n, "energy": energy}
+
+
+def validate_for_client(x: Sequence[float]) -> None:
+    """Same checks as Moodle client.py before sending to the server."""
+    signal = np.asarray(x, dtype=float)
+    if signal.ndim != 1:
+        raise ValueError("Signal must be a 1D real-valued sequence.")
+    if not np.issubdtype(signal.dtype, np.floating):
+        raise ValueError("Signal must be real-valued floats.")
+    ok, info = check_constraints(signal)
+    if not ok:
+        raise ValueError(
+            f"Server would reject signal: length={info['length']}, "
+            f"energy={info['energy']:.4f} (max {MAX_ENERGY})."
+        )
 
 
 def encode(message: str, *, as_numpy: bool = False) -> Union[List[float], np.ndarray]:
@@ -129,6 +151,7 @@ def encode(message: str, *, as_numpy: bool = False) -> Union[List[float], np.nda
 
 def write_channel_input(x: Sequence[float], path: str = "input.txt") -> None:
     """write x to file for use with client.py"""
+    validate_for_client(x)
     np.savetxt(path, np.asarray(x, dtype=float))
     print(f"wrote {len(x)} values to {path}")
 
