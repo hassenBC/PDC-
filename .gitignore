@@ -11,6 +11,20 @@ build/
 # Local test / channel I/O (regenerate with transmit.py)
 Encoding/input.txt
 Encoding/output.txt
+**/input.txt
+**/output.txt
+input/
+output/
+**/input/
+**/output/
+
+# Agent/tool local state
+.agents/
+.claude/
+.codex/
+**/.agents/
+**/.claude/
+**/.codex/
 
 # IDE
 .idea/
