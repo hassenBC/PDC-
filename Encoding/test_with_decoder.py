@@ -1,9 +1,6 @@
 """
 End-to-end tests: your encoder (Encoding/) + decoder (Decoding/).
 
-Does not modify any Decoding source. Decoding/test_harness.py keeps stub_encode
-as the decoder team's simulator; this file uses encode() from encode.py only.
-
 Run from Encoding/:
     python test_with_decoder.py
     python test_with_decoder.py --mc --trials 1000

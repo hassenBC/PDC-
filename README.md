@@ -2,20 +2,19 @@
 
 | Folder | Owner | Contents |
 |--------|-------|----------|
-| `Encoding/` | Person 2 | `encode()`, `transmit.py`, tests |
-| `Decoding/` | Person 3 | `decode()`, channel sim, demo |
+| `Encoding/` | Person 2 | `encode()`, tests |
+| `Decoding/` | Person 3 | `decode()`, channel sim, tests |
+| `Decoding/` | Person 3 | `decode()`, `demo.py`, `input.txt`, `output.txt` (demo I/O) |
 | `Python client/` | **Shared** | Moodle `client.py` + `channel_helper.py` |
 
 ## Channel client (EPFL)
 
 ```text
-encode (Encoding) → input.txt → client (Python client) → output.txt → decode (Decoding)
+encode → Decoding/input.txt → client.py → Decoding/output.txt → decode
 ```
 
-From `Encoding/` after `transmit.py`:
+Person 2: `python encode.py "..."` from `Encoding/` (writes `Decoding/input.txt`).
 
-```bash
-python "../Python client/client.py" --input_file=input.txt --output_file=output.txt --srv_hostname=iscsrv72.epfl.ch --srv_port=80
-```
+Person 3: `python demo.py decode` from `Decoding/` (after server step).
 
 Requires EPFL network or VPN; wait 30 s between server calls.

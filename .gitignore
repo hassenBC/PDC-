@@ -8,9 +8,11 @@ venv/
 dist/
 build/
 
-# Local test / channel I/O (regenerate with transmit.py)
+# Local test I/O
 Encoding/input.txt
 Encoding/output.txt
+Decoding/input.txt
+Decoding/output.txt
 **/input.txt
 **/output.txt
 input/
