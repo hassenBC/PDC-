@@ -1,4 +1,4 @@
-# PDC Decoder — Person 3 Implementation
+# PDC Decoder   Person 3 Implementation
 
 ## File Structure
 
@@ -62,7 +62,7 @@ Energy budget: `‖x‖² = 492 · r² = 1200`, so `r = √(1200/492) ≈ 1.562`
 ## Integration with Encoder
 
 The encoder (`Encoding/encode.py`) is fully integrated. `demo.py` imports it
-directly — no stub needed. Both sides use the same alphabet order and the same
+directly no stub needed. Both sides use the same alphabet order and the same
 convolutional code parameters (K=3, G1=7, G2=5 octal).
 
 ## Design Choices
@@ -98,7 +98,7 @@ and gives BER ≈ 1.3%, so P(perfect 240-bit decode) ≈ 4%.
 
 The K=3 convolutional code (generators G1=7, G2=5 octal) has free distance d_free=5.
 Soft Viterbi at Eb/N0 ≈ 3.87 dB gives BER ≈ 2.4×10⁻⁴, pushing
-P(perfect 240-bit decode) ≈ 94%. Same channel uses, same energy budget — purely
+P(perfect 240-bit decode) ≈ 94%. Same channel uses, same energy budget   purely
 an algorithmic upgrade.
 
 ### 6. Why soft-decision Viterbi?
@@ -119,4 +119,4 @@ Two failure modes:
 2. Convolutional decoder residual errors (probability ~6%): 0–3 wrong characters
 
 The `confidence_gap` metric in `decode_with_confidence()` lets you detect case 1
-before presenting the result. If gap < 4.0, the detection was borderline — retry.
+before presenting the result. If gap < 4.0, the detection was borderline   retry.
