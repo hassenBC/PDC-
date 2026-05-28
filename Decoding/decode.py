@@ -35,38 +35,8 @@ import math
 import numpy as np
 
 
-# =============================================================================
-# CONSTANTS
-# =============================================================================
-
-# WHY r = sqrt(1200/492)?
-# ───────────────────────
-# The problem enforces a total energy constraint: ‖x‖² ≤ 1200.
-#   Pilots:  8 pairs at (r, 0)  → 16 elements,  8 non-zero
-#   Data:    484 BPSK channel uses → 484 non-zero
-#   Total:   500 elements,  492 non-zero
-#
-# Equal energy per non-zero component (the budget-optimal allocation when the
-# pilot detection error rate is already low):
-#   ‖x‖² = 492 · r² = 1200  →  r² = 1200/492 ≈ 2.439,  r ≈ 1.562
-#
-# WHY 8 pilot pairs?
-# ──────────────────
-# Inter-candidate distance is d² = 16·r² ≈ 39.0, so P(wrong T_i adjacent) =
-# Q(d/2) = Q(2r) ≈ Q(3.12) ≈ 0.09%. With 4 pairs it would be Q(r√2) ≈ 1.3%,
-# i.e. ~15× more catastrophic failures. 8 pairs is the sweet spot before
-# the marginal data-energy cost dominates.
-
 r = math.sqrt(1200 / 492)   # ≈ 1.562
 
-# WHY this specific ALPHABET?
-# ───────────────────────────
-# The project specifies 64 characters: a-z (26) + A-Z (26) + 0-9 (10) + ' ' + '.'
-# That's exactly 2^6 = 64, so each character maps to a 6-bit integer.
-# The ORDER matters and must exactly match Person 2's encoder.
-# If even one character is in the wrong position, every character with that
-# 6-bit index will be decoded wrong.
-# Verify with Person 2 that their ALPHABET list uses this exact same string.
 
 ALPHABET = list(
     'abcdefghijklmnopqrstuvwxyz'   # indices  0-25
@@ -79,45 +49,13 @@ assert len(ALPHABET) == 64, f"ALPHABET length is {len(ALPHABET)}, expected 64"
 assert len(set(ALPHABET)) == 64, "ALPHABET contains duplicate characters"
 
 
-# =============================================================================
-# THE FOUR ROTATION CANDIDATES (pilot vectors without noise)
-# =============================================================================
 
-# WHY pilots at all?
-# ──────────────────
-# Problem 3(a) in the theory sheet PROVES that if you use a code where -c is
-# also a codeword (which BPSK does — every symbol has an antipodal pair),
-# the error probability is AT LEAST 1/2 if you don't know T_i.
-# That means without pilots you can't do better than random guessing.
-# The pilots solve this completely: 4 known test vectors let you identify T_i
-# before you touch the data.
-#
-# WHY (r, 0) as the pilot symbol?
-# ────────────────────────────────
-# When T_i is applied to (r, 0):
-#   T1: (r, 0) → (r,  0)   same, real axis
-#   T2: (r, 0) → (0,  r)   rotated 90°, imaginary axis
-#   T3: (r, 0) → (-r, 0)   rotated 180°, negative real axis
-#   T4: (r, 0) → (0, -r)   rotated 270°, negative imaginary axis
-#
-# These 4 outcomes are maximally separated — they point in 4 orthogonal
-# directions. This gives the largest possible noise margin for detection.
-
-# Build the 4 candidate pilot vectors (16 values = 8 repeated pairs)
-# Each is what the receiver WOULD see if that T_i was applied (noiseless)
 PILOT_CANDIDATES = {
     1: np.array([ r,  0,  r,  0,  r,  0,  r,  0,  r,  0,  r,  0,  r,  0,  r,  0]),  # T1: all real
     2: np.array([ 0,  r,  0,  r,  0,  r,  0,  r,  0,  r,  0,  r,  0,  r,  0,  r]),  # T2: all imaginary
     3: np.array([-r,  0, -r,  0, -r,  0, -r,  0, -r,  0, -r,  0, -r,  0, -r,  0]),  # T3: all negative real
     4: np.array([ 0, -r,  0, -r,  0, -r,  0, -r,  0, -r,  0, -r,  0, -r,  0, -r]),  # T4: all negative imaginary
 }
-
-# WHY are these candidates orthogonal?
-# cand_1 · cand_2 = 0  (different positions are non-zero)
-# cand_1 · cand_3 = -4r²  (antipodal — maximum separation possible)
-# The 4 candidates partition ℝ⁸ into 4 equal Voronoi regions with large gaps.
-# The minimum distance between any two candidates is ‖cand_1 - cand_2‖ = 2r√4 ≈ 6.3
-# With noise std=1, this gives a very small detection error probability.
 
 
 # =============================================================================
@@ -300,23 +238,6 @@ def qpsk_decode(combined_pairs):
     return bits
 
 
-# =============================================================================
-# CONVOLUTIONAL CODE — K=3 RATE-1/2 (GENERATORS 7, 5 OCTAL)
-# =============================================================================
-#
-# Encoder structure:
-#   state register holds (b_{k-1}, b_{k-2})  →  packed as state = 2·b_{k-1} + b_{k-2}
-#   on input b_k, outputs are
-#       c1 = b_k ⊕ b_{k-1} ⊕ b_{k-2}    (generator G1 = 111₂ = 7₈ = 1 + D + D²)
-#       c2 = b_k ⊕ b_{k-2}              (generator G2 = 101₂ = 5₈ = 1 + D²)
-#   then state shifts: (b_{k-1}, b_{k-2}) ← (b_k, b_{k-1})
-#
-# Free distance d_free = 5 (the minimum-weight non-zero codeword starting and
-# returning to state 0 has Hamming weight 5). For BPSK over AWGN with soft
-# Viterbi decoding, BER ≈ Q(√(d_free · 2R · Eb/N0)).
-#
-# We append (K-1) = 2 zero termination bits so the encoder ends in state 0,
-# letting the Viterbi decoder anchor its traceback at a known final state.
 
 CONV_K = 3                         # constraint length
 CONV_NSTATES = 1 << (CONV_K - 1)   # 4 trellis states
