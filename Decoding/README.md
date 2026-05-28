@@ -3,7 +3,7 @@
 ## File Structure
 
 ```
-decoder/
+Decoding/
 ├── decode.py          Core decode(y) → message function
 ├── decode_robust.py   Enhanced decoder with confidence scoring
 ├── channel_sim.py     Local channel simulator (for testing without server)
@@ -16,93 +16,107 @@ decoder/
 ## Quick Start
 
 ```bash
-
+# Install dependencies
 pip install numpy scipy
 
-
+# Run unit tests
 python test_harness.py
 
-
+# Monte Carlo reliability evaluation
 python test_harness.py --mc --trials 1000 --ber
 
-
+# BER / error analysis
 python error_analysis.py
 
-
+# Local end-to-end test (no server or VPN needed)
 python demo.py test "Hello this is the test message ok."
+
+# Full pipeline via EPFL server (must be on EPFL network or VPN)
+python demo.py run "Your 40 character message goes here  "
 ```
 
-## Integration with Person 2 (Encoder)
+## Demo Commands (May 29th)
 
-The test harness uses a `stub_encode()` function until Person 2's real encoder
-is ready. Once you have it:
+| Command | What it does |
+|---------|--------------|
+| `python demo.py run "<message>"` | Full pipeline: encode → server → decode |
+| `python demo.py transmit "<message>"` | Encode only, write `input.txt` |
+| `python demo.py decode [output.txt]` | Decode only from an existing `output.txt` |
+| `python demo.py test "<message>"` | Local simulation, no server needed |
 
-1. Open `test_harness.py`
-2. Replace:
-   ```python
-   from test_harness import stub_encode
-   ```
-   with:
-   ```python
-   from encode import encode as stub_encode
-   ```
-3. Verify the alphabet order matches: `'abcdefghijklmnopqrstuvwxyz' + 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' + '0123456789 .'`
+Messages must be exactly 40 characters (auto-padded with spaces).  
+Allowed characters: `a-z A-Z 0-9 space period`.  
+Wait 30 s between server calls (rate limit).
+
+## Signal Structure
+
+The transmitted vector `x` has 500 elements:
+
+```
+x[0:16]    8 pilot pairs  (16 values, 8 non-zero at ±r)
+x[16:500]  484 BPSK data  (484 non-zero), one coded bit per sample
+```
+
+Energy budget: `‖x‖² = 492 · r² = 1200`, so `r = √(1200/492) ≈ 1.562`.
+
+## Integration with Encoder
+
+The encoder (`Encoding/encode.py`) is fully integrated. `demo.py` imports it
+directly — no stub needed. Both sides use the same alphabet order and the same
+convolutional code parameters (K=3, G1=7, G2=5 octal).
 
 ## Design Choices
 
 ### 1. Why pilot symbols?
 Theory Problem 3(a) proves that without pilots, if the code is symmetric
-(−c is also a codeword), the error probability is ≥ 1/2. QPSK is symmetric,
-so we can't do better than random guessing without knowing T_i. The pilots
-(4 copies of (r,0)) solve this completely by letting the receiver identify T_i
-before decoding the data.
+(−c is also a codeword), the error probability is ≥ 1/2. BPSK is symmetric,
+so without knowing T_i we can't do better than random guessing. Eight pilot
+pairs `(r, 0)` let the receiver identify T_i before touching the data.
 
-### 2. Why (r, 0) as the pilot symbol?
-When each T_i is applied, (r, 0) maps to a different axis:
-- T1 → ( r,  0)   positive real axis
-- T2 → ( 0,  r)   positive imaginary axis
-- T3 → (-r,  0)   negative real axis
-- T4 → ( 0, -r)   negative imaginary axis
+### 2. Why `(r, 0)` as the pilot symbol?
+When each T_i is applied, `(r, 0)` maps to a different axis:
+- T1 → `( r,  0)`  positive real axis
+- T2 → `( 0,  r)`  positive imaginary axis
+- T3 → `(-r,  0)`  negative real axis
+- T4 → `( 0, -r)`  negative imaginary axis
 
-These 4 outcomes are orthogonal and maximally separated.
-The minimum distance between any two is 2r√4 ≈ 6.3, giving very reliable detection.
+These four outcomes are orthogonal and maximally separated.
 
-### 3. Why minimum squared distance (ML) for rotation detection?
-The received pilot is T_i(pilot) + Z where Z ~ N(0, I_8).
-The likelihood of observing y_pilot given hypothesis i is:
-    p(y_pilot | i) ∝ exp(-‖y_pilot - candidate_i‖² / 2)
-Maximising likelihood = minimising squared distance.
-This is the Bayes-optimal rule when all 4 T_i are equally likely.
+### 3. Why 8 pilot pairs?
+Inter-candidate distance² = `16r² ≈ 39`. P(wrong T_i) = Q(d/2) ≈ Q(3.12) ≈ 0.09%.
+With only 4 pairs the rate would be ~15× higher. 8 pairs is the sweet spot before
+the marginal data-energy cost starts to dominate.
 
-### 4. Why QPSK and not higher-order modulation (16-QAM etc.)?
-At the available SNR (s² ≈ 2.48 per component), QPSK has BER ≈ 10⁻³.
-16-QAM would require ~6 dB more SNR for the same BER — we don't have the energy budget.
-QPSK is optimal here.
+### 4. Why minimum squared distance (ML) for rotation detection?
+The received pilot is `y_pilot = T_i(pilot) + Z`, `Z ~ N(0, I_8)`.
+Maximising the likelihood over i is equivalent to minimising `‖y_pilot − candidate_i‖²`.
+This is Bayes-optimal when all four T_i are equally likely.
 
-### 5. Why send the data twice?
-Summing two independent noisy copies doubles the effective SNR (3 dB gain):
-    signal: s + s = 2s (doubles)
-    noise:  N(0,1) + N(0,1) = N(0,2)  (grows by √2)
-    SNR gain: (2s)²/2 ÷ s²/1 = 2×
-This is the maximum gain achievable from 2 independent copies.
-The 488-element vector fits in the n ≤ 500 constraint: 8 (pilots) + 240×2 (data) = 488.
+### 5. Why a convolutional code instead of repetition?
+The old rate-1/2 repetition scheme (send 240 bits twice) has minimum distance d=2
+and gives BER ≈ 1.3%, so P(perfect 240-bit decode) ≈ 4%.
 
-### 6. Why sum the copies rather than average them?
-For sign-based QPSK decoding, sum and average give identical bit decisions.
-We use sum because it's one less operation and matches the spec.
+The K=3 convolutional code (generators G1=7, G2=5 octal) has free distance d_free=5.
+Soft Viterbi at Eb/N0 ≈ 3.87 dB gives BER ≈ 2.4×10⁻⁴, pushing
+P(perfect 240-bit decode) ≈ 94%. Same channel uses, same energy budget — purely
+an algorithmic upgrade.
 
-### 7. Why sign-based QPSK decoding?
-QPSK encodes 2 bits per pair (s1, s2) where s1, s2 ∈ {+s, -s}.
-With Gaussian noise, the ML decision for b1 is: b1 = 0 if y1 ≥ 0, else 1.
-This is because p(y1 | s1=+s) > p(y1 | s1=-s) iff y1 > 0.
-The two bits are decoded independently — no cross-component computation needed.
+### 6. Why soft-decision Viterbi?
+The decoder operates on post-rotation-inversion real values directly, without
+thresholding to bits first. The branch metric is the correlation between the
+received pair and the candidate transmitted pair. Soft decoding gives ~2 dB
+extra coding gain over hard-decision Viterbi.
+
+### 7. Why BPSK and not QPSK or higher-order modulation?
+At the available SNR (s² ≈ 2.44 per component), BPSK paired with the
+convolutional code achieves ~94% perfect-decode probability. Higher-order
+modulation (QPSK, 16-QAM) would require more SNR for equivalent BER and
+offer no advantage here given the energy constraint.
 
 ### 8. What can go wrong?
 Two failure modes:
-1. Wrong T_i detection (probability ~10⁻⁵): entire message is garbled (≈ 20 wrong chars)
-2. QPSK noise (probability ~BER per bit): 0-5 wrong characters randomly scattered
+1. Wrong T_i detection (probability ~10⁻⁵): entire message is garbled (~20 wrong chars)
+2. Convolutional decoder residual errors (probability ~6%): 0–3 wrong characters
 
-The confidence_gap metric in decode_with_confidence() lets you detect case 1 before
-presenting the result. If gap < 2.0, the detection was borderline — consider retrying.
-
-
+The `confidence_gap` metric in `decode_with_confidence()` lets you detect case 1
+before presenting the result. If gap < 4.0, the detection was borderline — retry.
