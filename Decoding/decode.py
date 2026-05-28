@@ -86,7 +86,7 @@ assert len(set(ALPHABET)) == 64, "ALPHABET contains duplicate characters"
 # WHY pilots at all?
 # ──────────────────
 # Problem 3(a) in the theory sheet PROVES that if you use a code where -c is
-# also a codeword (which QPSK does — every symbol has an antipodal pair),
+# also a codeword (which BPSK does — every symbol has an antipodal pair),
 # the error probability is AT LEAST 1/2 if you don't know T_i.
 # That means without pilots you can't do better than random guessing.
 # The pilots solve this completely: 4 known test vectors let you identify T_i
@@ -157,9 +157,10 @@ def to_pairs(flat):
     WHY pairs?
     ─────────
     The entire system operates on 2D vectors because T_i acts on pairs.
-    QPSK also encodes 2 bits per pair. Reshaping into pairs makes both
-    the rotation inversion and the QPSK decoding cleaner and less error-prone
-    than working with flat indices.
+    The convolutional encoder also emits 2 coded bits per trellis step (c1, c2),
+    each transmitted as one BPSK sample. Reshaping into pairs makes both
+    the rotation inversion and the Viterbi branch metric computation cleaner
+    and less error-prone than working with flat indices.
 
     Example: [1, 2, 3, 4] → [(1, 2), (3, 4)]
     """
@@ -209,10 +210,10 @@ def invert_rotation(symbol_pairs, i_hat):
     WHY apply the inverse instead of just re-encoding?
     ──────────────────────────────────────────────────
     After the channel, every (a, b) pair in the data has been rotated by T_i.
-    To recover the original QPSK symbol, we undo that rotation.
-    The inverse is applied BEFORE QPSK decoding, not after, because QPSK
-    decoding assumes symbols are axis-aligned. Trying to decode a rotated
-    QPSK constellation would give completely wrong results.
+    To recover the original BPSK symbols, we undo that rotation.
+    The inverse is applied BEFORE Viterbi decoding, not after, because the
+    branch metric assumes symbols are axis-aligned. Trying to decode a rotated
+    BPSK signal would give completely wrong results.
 
     Parameters
     ----------
@@ -247,7 +248,7 @@ def combine_copies(copy1, copy2):
         After  combining:  SNR = (2s)² / 2 = 4s²/2 = 2s²
 
     So SNR doubles (3 dB gain). This is the maximum achievable from 2 equal copies.
-    Summing (rather than averaging) is equivalent for the sign-based QPSK decision
+    Summing (rather than averaging) is equivalent for the sign-based BPSK decision
     rule that follows — the factor of 2 doesn't matter when you only care about sign.
 
     Parameters
@@ -272,27 +273,21 @@ def qpsk_decode(combined_pairs):
 
     WHY sign-based decision?
     ────────────────────────
-    QPSK encodes 2 bits into one 2D symbol. The 4 constellation points are at:
-        (+1, +1)  →  bits 00
-        (-1, +1)  →  bits 10
-        (-1, -1)  →  bits 11
-        (+1, -1)  →  bits 01
+    Each trellis step emits two BPSK symbols (c1, c2), one per component.
+    The constellation per component has two points: +s (bit 0) and -s (bit 1).
 
     Because the noise is isotropic Gaussian (N(0, I)), the optimal decision
-    boundary between (+x, *) and (-x, *) is the vertical axis (y1 = 0).
-    Similarly for y2. So each component is decoded independently by its sign.
+    boundary is the zero axis. Each component is decoded independently by sign.
 
-    WHY is this the ML rule for QPSK?
+    WHY is this the ML rule for BPSK?
     ──────────────────────────────────
-    The ML rule picks the constellation point maximising p(y | symbol).
-    For Gaussian noise, p(y | (s1, s2)) ∝ exp(-(y1-s1)² - (y2-s2)²).
-    Since y1 and y2 are independent, each bit is decoded independently.
-    For b1: p(y1 | s1=+1) > p(y1 | s1=-1)  iff  y1 > 0.
-    So sign(y1) gives the ML decision for b1. Same for b2.
+    The ML rule picks the symbol maximising p(y | symbol).
+    For Gaussian noise, p(y1 | s1=+s) > p(y1 | s1=-s)  iff  y1 > 0.
+    So sign(y1) gives the ML decision for c1. Same for c2.
 
     Bit encoding convention (must match Person 2's encoder):
-        b1 = 0 if y1 ≥ 0,  b1 = 1 if y1 < 0
-        b2 = 0 if y2 ≥ 0,  b2 = 1 if y2 < 0
+        c1 = 0 if y1 ≥ 0,  c1 = 1 if y1 < 0
+        c2 = 0 if y2 ≥ 0,  c2 = 1 if y2 < 0
 
     Returns
     -------
@@ -456,7 +451,7 @@ def bits_to_message(bits):
     ─────────────────────────
     The alphabet has 64 characters = 2^6. So exactly 6 bits are needed
     to index into it. 40 characters × 6 bits = 240 bits total.
-    The 240 bits come from 120 QPSK symbols × 2 bits per symbol.
+    The 240 bits come from 242 trellis steps × 2 coded bits/step, decoded by Viterbi.
     Everything closes perfectly.
 
     WHY big-endian (MSB first)?

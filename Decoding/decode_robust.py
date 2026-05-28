@@ -3,7 +3,7 @@ decode_robust.py — Enhanced Decoder with Confidence Scoring
 ============================================================
 This builds on decode.py and adds:
   1. Confidence scoring: how sure are we about the detected T_i?
-  2. Soft QPSK metrics: which individual symbols are most uncertain?
+  2. Soft BPSK metrics: which individual trellis steps are most uncertain?
   3. decode_with_confidence(): returns message + full diagnostics
 
 WHY a separate file?
@@ -94,7 +94,7 @@ def rotation_confidence(distances):
 
 def symbol_margins(combined_pairs):
     """
-    For each QPSK symbol, compute how far each component is from the
+    For each BPSK trellis step, compute how far each component is from the
     decision boundary (the zero axis).
 
     WHY track margins?
