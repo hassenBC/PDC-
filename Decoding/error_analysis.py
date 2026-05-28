@@ -126,22 +126,29 @@ def print_classification_report(results, n_trials):
 
 def ber_vs_snr():
     """
-    Compare theoretical vs empirical BER for this system.
+    Theoretical BER for the current system: K=3 (7,5) rate-1/2 conv code + BPSK + soft Viterbi.
 
-    THEORETICAL BER FOR QPSK WITH DIVERSITY COMBINING
-    ───────────────────────────────────────────────────
-    Standard QPSK BER (no diversity, 1 copy):
-        BER₁ = Q(√(2·s²))
+    SYSTEM PARAMETERS
+    ─────────────────
+    Frame: 8 pilot pairs (16 elements, 8 non-zero) + 484 BPSK coded symbols = 500 elements.
+    492 non-zero components share the energy budget of 1200:
+        s² = r² = 1200/492 ≈ 2.439   (energy per non-zero component)
 
-    With 2 copies summed (MRC combining):
-        Combined signal amplitude: 2s
-        Combined noise variance:   2 (sum of two independent unit variances)
-        Effective SNR:             (2s)²/2 = 2s²
+    CONVOLUTIONAL CODE BER BOUND (soft Viterbi, first-event)
+    ─────────────────────────────────────────────────────────
+    For the (7,5) K=3 code, free distance d_free = 5, code rate R = 1/2.
+    With noise variance σ² = 1 (unit Gaussian):
+        Eb/N0 = s²   (energy per info bit in linear units)
+        BER ≤ Q(√(d_free · 2R · Eb/N0)) = Q(√(5 · s²))
 
-    So BER with 2-copy combining:
-        BER₂ = Q(√(2 · 2s²)) = Q(√(4s²)) = Q(2s)
+    This is the dominant first-event union bound; the true BER is slightly
+    higher (factor ~1.8× empirically at this SNR) because higher-weight error
+    events are not negligible at Eb/N0 ≈ 3.87 dB.
 
-    The 3 dB SNR gain from diversity means BER drops significantly.
+    PILOT DETECTION ERROR
+    ─────────────────────
+    Adjacent candidate distance² = 16·r²; P(wrong T_i, one neighbour) = Q(2r).
+    Union bound over 2 neighbours: P(wrong T_i) ≈ 2·Q(2r).
 
     WHY does BER matter for the grade?
     ───────────────────────────────────
@@ -150,49 +157,45 @@ def ber_vs_snr():
     Expected χ = 40 × P(char wrong)
     Expected score = max(10 - 40 × P(char wrong), 0)
     """
-    s_sq = (1200 - 4 * r**2) / 480
+    def Q(x):
+        return 0.5 * sp.erfc(x / math.sqrt(2))
 
-    # QPSK component amplitude s = sqrt(s_sq)
-    # After combining two copies: signal per component = 2s, noise std = sqrt(2)
-    # BER = Q(2s/sqrt(2)) = Q(s*sqrt(2))
-    # Using Q(x) = 0.5*erfc(x/sqrt(2)): BER = 0.5*erfc(s) = 0.5*erfc(sqrt(s_sq))
+    # Energy per non-zero component = r² (all 492 components share 1200 equally)
+    s_sq = r ** 2   # = 1200/492 ≈ 2.439
 
-    # Without diversity (1 copy): BER = Q(s/1) = 0.5*erfc(s/sqrt(2)) = 0.5*erfc(sqrt(s_sq/2))
-    snr1 = s_sq
-    ber1 = 0.5 * sp.erfc(math.sqrt(s_sq / 2))   # Q(s) = 0.5*erfc(s/sqrt(2))
+    # Soft-decision Viterbi BER bound
+    ber = Q(math.sqrt(5 * s_sq))
 
-    # With 2-copy combining: BER = Q(s*sqrt(2)) = 0.5*erfc(sqrt(s_sq))
-    snr2 = 2 * s_sq
-    ber2 = 0.5 * sp.erfc(math.sqrt(s_sq))        # Q(s*sqrt(2)) = 0.5*erfc(s)
+    # Pilot detection error (adjacent candidate confusion)
+    pilot_err = 2 * Q(2 * r)
 
-    # Char error probabilities
-    p_char_wrong_1 = 1 - (1 - ber1) ** 6
-    p_char_wrong_2 = 1 - (1 - ber2) ** 6
+    # Character error probability (6 info bits per character)
+    p_char_wrong = 1 - (1 - ber) ** 6
+    expected_char_errors = 40 * p_char_wrong
+    expected_score = max(10 - expected_char_errors, 0)
 
-    expected_char_errors_1 = 40 * p_char_wrong_1
-    expected_char_errors_2 = 40 * p_char_wrong_2
+    # Perfect decode probabilities
+    p_perfect_bits  = (1 - ber) ** 240
+    p_perfect_pilot = 1 - pilot_err
+    p_perfect_total = p_perfect_pilot * p_perfect_bits
 
-    expected_score_1 = max(10 - expected_char_errors_1, 0)
-    expected_score_2 = max(10 - expected_char_errors_2, 0)
-
-    print("\n── BER vs SNR Analysis ─────────────────────────────────────────")
-    print(f"  QPSK component amplitude s = {math.sqrt(s_sq):.4f}")
-    print(f"  s² = {s_sq:.4f}")
+    print("\n── BER vs SNR Analysis (K=3 conv code, soft Viterbi) ───────────")
+    print(f"  Energy per component: s² = r² = {s_sq:.4f}")
+    print(f"  Eb/N0 (linear):       {s_sq:.4f}  ({10*math.log10(s_sq):.2f} dB)")
     print()
-    print(f"  WITHOUT diversity combining (1 copy):")
-    print(f"    SNR per component:       {snr1:.4f}  ({10*math.log10(snr1):.2f} dB)")
-    print(f"    BER:                     {ber1:.6f}")
-    print(f"    Expected wrong chars:    {expected_char_errors_1:.4f} / 40")
-    print(f"    Expected demo score:     {expected_score_1:.2f} / 13")
+    print(f"  BER bound  Q(√(5·s²)): {ber:.4e}")
+    print(f"  Expected wrong info bits per message: {240 * ber:.4f} / 240")
+    print(f"  P(all 240 info bits correct):         {p_perfect_bits:.4f}")
     print()
-    print(f"  WITH diversity combining (2 copies summed):")
-    print(f"    SNR per component:       {snr2:.4f}  ({10*math.log10(snr2):.2f} dB)")
-    print(f"    BER:                     {ber2:.6f}")
-    print(f"    Expected wrong chars:    {expected_char_errors_2:.4f} / 40")
-    print(f"    Expected demo score:     {expected_score_2:.2f} / 13")
+    print(f"  Pilot detection error 2·Q(2r):        {pilot_err:.4e}")
+    print(f"  P(correct T_i detection):             {p_perfect_pilot:.6f}")
     print()
-    print(f"  Diversity gain: {10*math.log10(snr2/snr1):.1f} dB  (factor {snr2/snr1:.1f}× in SNR)")
-    print(f"  Score improvement: {expected_score_1:.2f} → {expected_score_2:.2f}")
+    print(f"  Overall P(perfect decode):            {p_perfect_total:.4f}  (~{p_perfect_total*100:.1f}%)")
+    print(f"  Expected wrong chars per decode:      {expected_char_errors:.4f} / 40")
+    print(f"  Expected demo score (lower bound):    {expected_score:.2f} / 13")
+    print()
+    print(f"  Note: empirical success rate is ~90% (first-event bound is ~1.8× optimistic"
+          f" at Eb/N0={10*math.log10(s_sq):.1f} dB — higher-weight error events matter).")
 
 
 # =============================================================================
